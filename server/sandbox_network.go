@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"net"
 	"strings"
 	"time"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/cri-o/cri-o/internal/log"
 	"github.com/cri-o/cri-o/server/metrics"
 	"github.com/pkg/errors"
-	"k8s.io/kubernetes/pkg/kubelet/dockershim/network/hostport"
 )
 
 // networkStart sets up the sandbox's network and returns the pod IP on success
@@ -67,28 +65,9 @@ func (s *Server) networkStart(ctx context.Context, sb *sandbox.Sandbox) (podIPs 
 		return nil, nil, fmt.Errorf("failed to get network JSON for pod sandbox %s(%s): %v", sb.Name(), sb.ID(), err)
 	}
 
-	for idx, podIPConfig := range network.IPs {
+	for _, podIPConfig := range network.IPs {
 		podIP := strings.Split(podIPConfig.Address.String(), "/")[0]
-
-		// Apply the hostport mappings only for the first IP to avoid allocating
-		// the same host port twice
-		if idx == 0 && len(sb.PortMappings()) > 0 {
-			ip := net.ParseIP(podIP)
-			if ip == nil {
-				return nil, nil, fmt.Errorf("failed to get valid ip address for sandbox %s(%s)", sb.Name(), sb.ID())
-			}
-
-			err = s.hostportManager.Add(sb.ID(), &hostport.PodPortMapping{
-				Name:         sb.Name(),
-				PortMappings: sb.PortMappings(),
-				IP:           ip,
-				HostNetwork:  false,
-			}, "lo")
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to add hostport mapping for sandbox %s(%s): %v", sb.Name(), sb.ID(), err)
-			}
-		}
-
+		log.Infof(ctx, "Skipped use of hostport manager add...")
 		podIPs = append(podIPs, podIP)
 	}
 
@@ -137,14 +116,7 @@ func (s *Server) networkStop(ctx context.Context, sb *sandbox.Sandbox) error {
 	stopCtx, stopCancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer stopCancel()
 
-	if err := s.hostportManager.Remove(sb.ID(), &hostport.PodPortMapping{
-		Name:         sb.Name(),
-		PortMappings: sb.PortMappings(),
-		HostNetwork:  false,
-	}); err != nil {
-		log.Warnf(ctx, "failed to remove hostport for pod sandbox %s(%s): %v",
-			sb.Name(), sb.ID(), err)
-	}
+	log.Infof(ctx, "Skipped use of hostport manager remove...")
 
 	podNetwork, err := s.newPodNetwork(sb)
 	if err != nil {

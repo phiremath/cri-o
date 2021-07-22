@@ -29,11 +29,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	pb "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
-	"k8s.io/kubernetes/pkg/kubelet/dockershim/network/hostport"
 	"k8s.io/kubernetes/pkg/kubelet/server/streaming"
-	iptablesproxy "k8s.io/kubernetes/pkg/proxy/iptables"
-	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
-	utilexec "k8s.io/utils/exec"
 )
 
 const (
@@ -51,9 +47,8 @@ type StreamService struct {
 
 // Server implements the RuntimeService and ImageService
 type Server struct {
-	config          libconfig.Config
-	stream          StreamService
-	hostportManager hostport.HostPortManager
+	config libconfig.Config
+	stream StreamService
 
 	*lib.ContainerServer
 	monitorsChan      chan struct{}
@@ -333,12 +328,6 @@ func New(
 		return nil, err
 	}
 
-	iptInterface := utiliptables.New(utilexec.New(), utiliptables.ProtocolIpv4)
-	if _, err := iptInterface.EnsureChain(utiliptables.TableNAT, iptablesproxy.KubeMarkMasqChain); err != nil {
-		logrus.Warnf("unable to ensure iptables chain: %v", err)
-	}
-	hostportManager := hostport.NewHostportManager(iptInterface)
-
 	idMappings, err := getIDMappings(config)
 	if err != nil {
 		return nil, err
@@ -346,7 +335,6 @@ func New(
 
 	s := &Server{
 		ContainerServer:          containerServer,
-		hostportManager:          hostportManager,
 		config:                   *config,
 		monitorsChan:             make(chan struct{}),
 		defaultIDMappings:        idMappings,
