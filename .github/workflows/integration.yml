@@ -8,7 +8,7 @@ on:
       - release-*
   pull_request:
 env:
-  GO_VERSION: "1.17"
+  GO_VERSION: '1.16'
 jobs:
   critest:
     runs-on: ubuntu-latest
@@ -29,8 +29,8 @@ jobs:
       - run: make all test-binaries
       - run: sudo -E test/test_runner.sh critest.bats
         env:
-          JOBS: "1"
-          RUN_CRITEST: "1"
+          JOBS: '1'
+          RUN_CRITEST: '1'
 
   test:
     runs-on: ubuntu-latest
@@ -51,7 +51,7 @@ jobs:
       - run: make all test-binaries
       - run: sudo -E test/test_runner.sh
         env:
-          JOBS: "2"
+          JOBS: '2'
 
   test-cgroupfs:
     runs-on: ubuntu-latest
@@ -73,7 +73,7 @@ jobs:
       - run: sed -i 's/\.slice//g' test/testdata/*.json
       - run: sudo -E test/test_runner.sh
         env:
-          JOBS: "2"
+          JOBS: '2'
           CONTAINER_CGROUP_MANAGER: cgroupfs
           CONTAINER_CONMON_CGROUP: pod
 
@@ -96,5 +96,5 @@ jobs:
       - run: make all test-binaries
       - run: sudo -E test/test_runner.sh
         env:
-          JOBS: "2"
-          TEST_USERNS: "1"
+          JOBS: '2'
+          TEST_USERNS: '1'
