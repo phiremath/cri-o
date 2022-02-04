@@ -19,7 +19,6 @@ import (
 	imageTypes "github.com/containers/image/v5/types"
 	"github.com/containers/storage/pkg/idtools"
 	storageTypes "github.com/containers/storage/types"
-	"github.com/cri-o/cri-o/internal/hostport"
 	"github.com/cri-o/cri-o/internal/lib"
 	"github.com/cri-o/cri-o/internal/lib/sandbox"
 	"github.com/cri-o/cri-o/internal/log"
@@ -57,9 +56,8 @@ type StreamService struct {
 
 // Server implements the RuntimeService and ImageService
 type Server struct {
-	config          libconfig.Config
-	stream          StreamService
-	hostportManager hostport.HostPortManager
+	config libconfig.Config
+	stream StreamService
 
 	*lib.ContainerServer
 	monitorsChan      chan struct{}
@@ -397,8 +395,6 @@ func New(
 		return nil, err
 	}
 
-	hostportManager := hostport.NewMetaHostportManager()
-
 	idMappings, err := getIDMappings(config)
 	if err != nil {
 		return nil, err
@@ -412,7 +408,6 @@ func New(
 
 	s := &Server{
 		ContainerServer:          containerServer,
-		hostportManager:          hostportManager,
 		config:                   *config,
 		monitorsChan:             make(chan struct{}),
 		defaultIDMappings:        idMappings,
