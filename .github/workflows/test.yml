@@ -8,7 +8,7 @@ on:
       - release-*
   pull_request:
 env:
-  GO_VERSION: '1.16'
+  GO_VERSION: "1.17"
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -118,7 +118,7 @@ jobs:
       - uses: cachix/cachix-action@v10
         with:
           name: cri-o-static
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
           pushFilter: cri-o
       - run: nix-build nix
       - run: result/bin/crio version
@@ -138,7 +138,7 @@ jobs:
       - uses: cachix/cachix-action@v10
         with:
           name: cri-o-static
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
           pushFilter: cri-o
       - run: nix-build nix/default-arm64.nix
       - run: file result/bin/crio
