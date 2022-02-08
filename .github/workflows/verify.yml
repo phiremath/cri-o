@@ -8,7 +8,7 @@ on:
       - release-*
   pull_request:
 env:
-  GO_VERSION: '1.16'
+  GO_VERSION: "1.17"
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -25,22 +25,22 @@ jobs:
   shellcheck:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - uses: lumaxis/shellcheck-problem-matchers@v1
-    - run: make shellcheck
+      - uses: actions/checkout@v2
+      - uses: lumaxis/shellcheck-problem-matchers@v1
+      - run: make shellcheck
 
   shfmt:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - run: make shfmt
+      - uses: actions/checkout@v2
+      - run: make shfmt
 
   docs:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - run: scripts/github-actions-packages
-    - run: make docs-validation
+      - uses: actions/checkout@v2
+      - run: scripts/github-actions-packages
+      - run: make docs-validation
 
   vendor:
     runs-on: ubuntu-latest
