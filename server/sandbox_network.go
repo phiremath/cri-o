@@ -8,15 +8,12 @@ import (
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	cnicurrent "github.com/containernetworking/cni/pkg/types/current"
-	"github.com/cri-o/cri-o/internal/hostport"
 	"github.com/cri-o/cri-o/internal/lib/sandbox"
 	"github.com/cri-o/cri-o/internal/log"
 	"github.com/cri-o/cri-o/server/metrics"
 	"github.com/cri-o/ocicni/pkg/ocicni"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
-
-	utilnet "k8s.io/utils/net"
 )
 
 // networkStart sets up the sandbox's network and returns the pod IP on success
@@ -74,48 +71,12 @@ func (s *Server) networkStart(ctx context.Context, sb *sandbox.Sandbox) (podIPs 
 		return nil, nil, fmt.Errorf("failed to get network JSON for pod sandbox %s(%s): %v", sb.Name(), sb.ID(), err)
 	}
 
-	// only do portmapping to the first IP of each IP family
-	foundIPv4 := false
-	foundIPv6 := false
-	// cache the portmapping info
-	sbID := sb.ID()
-	sbName := sb.Name()
-	sbPortMappings := sb.PortMappings()
 	// iterate over each IP and add the portmap if needed
 	for _, podIPConfig := range network.IPs {
 		ip := podIPConfig.Address.IP
 		podIPs = append(podIPs, ip.String())
-
-		// the pod has host-ports defined
-		if len(sbPortMappings) > 0 {
-			mapping := &hostport.PodPortMapping{
-				Name:         sbName,
-				PortMappings: sbPortMappings,
-				IP:           ip,
-				HostNetwork:  false,
-			}
-			// nolint:gocritic // using a switch statement is not much different
-			if utilnet.IsIPv6(ip) {
-				if foundIPv6 {
-					// we have already done the portmap for IPv6
-					continue
-				}
-				// found a new IPv6 address, do the portmap
-				foundIPv6 = true
-			} else if foundIPv4 {
-				// we have already done the portmap for IPv4
-				continue
-			} else {
-				// found a new IPv4 address, do the portmap
-				foundIPv4 = true
-			}
-			err = s.hostportManager.Add(sbID, mapping, "")
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to add hostport mapping for sandbox %s(%s): %v", sb.Name(), sb.ID(), err)
-			}
-		}
+		log.Infof(ctx, "Skipped use of hostport manager add...")
 	}
-
 	log.Debugf(ctx, "Found POD IPs: %v", podIPs)
 
 	// metric about the whole network setup operation
@@ -161,16 +122,7 @@ func (s *Server) networkStop(ctx context.Context, sb *sandbox.Sandbox) error {
 	stopCtx, stopCancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer stopCancel()
 
-	mapping := &hostport.PodPortMapping{
-		Name:         sb.Name(),
-		PortMappings: sb.PortMappings(),
-		HostNetwork:  false,
-	}
-	// portMapping removal does not need the IP address
-	if err := s.hostportManager.Remove(sb.ID(), mapping); err != nil {
-		log.Warnf(ctx, "Failed to remove hostport for pod sandbox %s(%s): %v",
-			sb.Name(), sb.ID(), err)
-	}
+	log.Infof(ctx, "Skipped use of hostport manager remove...")
 
 	podNetwork, err := s.newPodNetwork(sb)
 	if err != nil {
@@ -217,6 +169,21 @@ func (s *Server) newPodNetwork(sb *sandbox.Sandbox) (ocicni.PodNetwork, error) {
 		}
 	}
 
+	// Pass along sandbox port mapping info.
+	var portMappings []ocicni.PortMapping //nolint
+	sbPortMappings := sb.PortMappings()
+	for _, pm := range sbPortMappings {
+		if pm.ContainerPort == 0 {
+			continue
+		}
+		portMap := ocicni.PortMapping{
+			HostPort:      pm.HostPort,
+			ContainerPort: pm.ContainerPort,
+			Protocol:      string(pm.Protocol),
+		}
+		portMappings = append(portMappings, portMap)
+	}
+
 	network := s.config.CNIPlugin().GetDefaultNetworkName()
 	return ocicni.PodNetwork{
 		Name:      sb.KubeName(),
@@ -226,7 +193,7 @@ func (s *Server) newPodNetwork(sb *sandbox.Sandbox) (ocicni.PodNetwork, error) {
 		ID:        sb.ID(),
 		NetNS:     sb.NetNsPath(),
 		RuntimeConfig: map[string]ocicni.RuntimeConfig{
-			network: {Bandwidth: bwConfig},
+			network: {Bandwidth: bwConfig, PortMappings: portMappings},
 		},
 	}, nil
 }
