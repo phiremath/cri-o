@@ -325,7 +325,11 @@ func (s *Server) runPodSandbox(ctx context.Context, req *types.RunPodSandboxRequ
 		// if the cni plugin isn't ready yet, we should wait until it is
 		// before proceeding
 		watcher := s.config.CNIPluginAddWatcher()
-		<-watcher
+		log.Infof(ctx, "CNI plugin not ready. Waiting to create %s as it is not host network", sbox.Name())
+		if ready := <-watcher; !ready {
+			return nil, errors.Wrapf(err, "server shutdown before network was ready")
+		}
+		log.Infof(ctx, "CNI plugin is now ready. Continuing to create %s", sbox.Name())
 	}
 
 	description := fmt.Sprintf("runSandbox: releasing pod sandbox name: %s", sbox.Name())
@@ -976,7 +980,7 @@ func (s *Server) configureGeneratorForSysctls(ctx context.Context, g *generate.G
 
 	for _, sysctl := range defaultSysctls {
 		if err := sysctl.Validate(hostNetwork, hostIPC); err != nil {
-			log.Warnf(ctx, "Skipping invalid sysctl %s: %v", sysctl, err)
+			log.Warnf(ctx, "Skipping invalid sysctl specified by config %s: %v", sysctl, err)
 			continue
 		}
 		g.AddLinuxSysctl(sysctl.Key(), sysctl.Value())
@@ -986,6 +990,11 @@ func (s *Server) configureGeneratorForSysctls(ctx context.Context, g *generate.G
 	// extract linux sysctls from annotations and pass down to oci runtime
 	// Will override any duplicate default systcl from crio.conf
 	for key, value := range sysctls {
+		sysctl := libconfig.NewSysctl(key, value)
+		if err := sysctl.Validate(hostNetwork, hostIPC); err != nil {
+			log.Warnf(ctx, "Skipping invalid sysctl specified over CRI %s: %v", sysctl, err)
+			continue
+		}
 		g.AddLinuxSysctl(key, value)
 		sysctlsToReturn[key] = value
 	}

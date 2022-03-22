@@ -156,6 +156,60 @@ function teardown() {
 	[[ "$output" == *"net.ipv4.ip_forward = 1"* ]]
 }
 
+@test "skip pod sysctls to runtime if host" {
+	if test -n "$CONTAINER_UID_MAPPINGS"; then
+		skip "userNS enabled"
+	fi
+	CONTAINER_DEFAULT_SYSCTLS="net.ipv4.ip_forward=0" start_crio
+
+	jq '  .linux.security_context.namespace_options = {
+			network: 2,
+			ipc: 2
+		} |
+		  .linux.sysctls = {
+			"kernel.shm_rmid_forced": "1",
+			"net.ipv4.ip_local_port_range": "2048 65000",
+			"kernel.msgmax": "16384"
+		}' "$TESTDATA"/sandbox_config.json > "$TESTDIR"/sandbox.json
+
+	pod_id=$(crictl runp "$TESTDIR"/sandbox.json)
+	ctr_id=$(crictl create "$pod_id" "$TESTDATA"/container_redis.json "$TESTDIR"/sandbox.json)
+	crictl start "$ctr_id"
+
+	output=$(crictl exec --sync "$ctr_id" sysctl kernel.shm_rmid_forced)
+	[[ "$output" != *"kernel.shm_rmid_forced = 1"* ]]
+
+	output=$(crictl exec --sync "$ctr_id" sysctl kernel.msgmax)
+	[[ "$output" != *"kernel.msgmax = 16384"* ]]
+
+	output=$(crictl exec --sync "$ctr_id" sysctl net.ipv4.ip_local_port_range)
+	[[ "$output" != *"net.ipv4.ip_local_port_range = 2048	65000"* ]]
+
+	output=$(crictl exec --sync "$ctr_id" sysctl net.ipv4.ip_forward)
+	[[ "$output" != *"net.ipv4.ip_forward = 0"* ]]
+}
+
+@test "fail to pass pod sysctl to runtime if invalid value" {
+	if test -n "$CONTAINER_UID_MAPPINGS"; then
+		skip "userNS enabled"
+	fi
+	start_crio
+
+	jq --arg sysctl "1024 65000'+'net.ipv4.ip_forward=0'" \
+		'.linux.sysctls = {
+			"net.ipv4.ip_local_port_range": $sysctl,
+		}' "$TESTDATA"/sandbox_config.json > "$TESTDIR"/sandbox.json
+
+	! crictl runp "$TESTDIR"/sandbox.json
+
+	jq --arg sysctl "net.ipv4.ip_local_port_range=1024 65000'+'net.ipv4.ip_forward" \
+		'.linux.sysctls = {
+			($sysctl): "0",
+		}' "$TESTDATA"/sandbox_config.json > "$TESTDIR"/sandbox.json
+
+	! crictl runp "$TESTDIR"/sandbox.json
+}
+
 @test "pod stop idempotent" {
 	start_crio
 	pod_id=$(crictl runp "$TESTDATA"/sandbox_config.json)
